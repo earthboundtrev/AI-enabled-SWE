@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List
 from datetime import datetime
@@ -39,6 +41,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for React frontend
+try:
+    app.mount("/assets", StaticFiles(directory="app/static/assets"), name="assets")
+except Exception as e:
+    logger.warning(f"Could not mount assets: {e}")
 
 # ---- Database Configuration ----
 SQLALCHEMY_DATABASE_URL = "sqlite:///./inventory.db"
@@ -483,6 +491,26 @@ async def delete_product(product_id: int, db: Session = Depends(get_db)):
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow()}
+
+@app.get("/")
+async def serve_frontend():
+    """Serve the React frontend."""
+    try:
+        return FileResponse("app/static/index.html")
+    except FileNotFoundError:
+        return {"message": "Frontend not found. Please build the React application."}
+
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    """Serve React app for client-side routing."""
+    # Skip API routes
+    if full_path.startswith(("api/", "docs", "openapi.json", "health")):
+        raise HTTPException(status_code=404, detail="Not found")
+    
+    try:
+        return FileResponse("app/static/index.html")
+    except FileNotFoundError:
+        return {"message": "Frontend not found. Please build the React application."}
 
 @app.post("/seed-data")
 async def seed_data(db: Session = Depends(get_db)):

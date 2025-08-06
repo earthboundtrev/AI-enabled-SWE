@@ -1,0 +1,93 @@
+# ==============================================================================
+# Docker Compose configuration for AI-Driven Software Engineering Project
+# 
+# This file provides easy deployment options for both development and production
+# environments.
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-driven-inventory-app
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=sqlite:///./inventory.db
+      - LOG_LEVEL=INFO
+    volumes:
+      # Mount database for persistence (optional)
+      - ./data:/app/data
+      # Mount logs directory
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - app-network
+
+  # Development service (with hot reload)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: ai-driven-inventory-app-dev
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=sqlite:///./inventory.db
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    volumes:
+      # Mount source code for hot reload
+      - ./app:/app/app
+      - ./utils.py:/app/utils.py
+      - ./requirements.txt:/app/requirements.txt
+      # Mount frontend for development
+      - ./artifacts/React:/app/frontend
+      # Mount database and logs
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    profiles:
+      - development
+    networks:
+      - app-network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: ai-driven-inventory-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    profiles:
+      - production
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  app-data:
+    driver: local
+  app-logs:
+    driver: local 
